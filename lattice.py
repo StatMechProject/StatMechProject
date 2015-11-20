@@ -15,8 +15,10 @@ class Lattice:
         self.c = self.dx/self.dt
         self.Fi = np.zeros((self.Nvecs,Nx,Ny)); 
         self.FiStar = self.Fi
+        self.FiEq = self.Fi
         self.rho = np.zeros((Nx,Ny))
         self.u = np.zeros((Nx,Ny))
+        self.s = self.Fi
         self.es = np.array([0,1,-1,1j,-1j,1+1j,-1-1j,-1+1j,1-1j]).reshape((9,1,1))
         self.ws = np.array([4/9.,1/9.,1/9.,1/9.,1/9.,1/36.,1/36.,1/36.,1/36.]).reshape((9,1,1))
         self.reflectMesh = reflectMesh.astype(bool)
@@ -63,6 +65,14 @@ class Lattice:
                 FiStar[i,xSIndex[i],:]=FiStar[revDirI[i],xSIndex[revDirI[i]],:]
             if yShift[i]:
                 FiStar[i,:,ySIndex[i]]=FiStar[revDirI[i],:,ySIndex[revDirI[i]]]
+
+    def updateFi():
+        conj_u = np.conj(self.u)
+        product = np.real(self.es * conj_u))
+        self.s = self.ws * (3/self.c * product + 9/(2 * self.c ** 2) * product ** 2 - 3/(2 * self.c^2) * self.u * conj_u
+        self.FiEq = self.ws * self.rho + self.rho * self.s
+        self.Fi = self.Fi - 1/self.tau * (self.FiStar - self.FiEq)
+
 
 
 class Visualization:
