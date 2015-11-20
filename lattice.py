@@ -9,7 +9,7 @@ boundaryMask[0,:]=boundaryMask[-1,:]=boundaryMask[:,0]=boundaryMask[:,-1]=1
 
 class Lattice:
     
-    def __init__(self,reflectMesh,Nx=512,Ny=256):
+    def __init__(self,reflectMesh=boundaryMask,Nx=512,Ny=256):
         self.Nx,self.Ny,self.Nvecs = 512,256,9
         self.dx=.001; self.dt=.01
         self.c = self.dx/self.dt
@@ -19,13 +19,15 @@ class Lattice:
         self.rho = np.zeros((Nx,Ny))
         self.u = np.zeros((Nx,Ny))
         self.s = self.Fi
-        self.es = np.array([0,1,-1,1j,-1j,1+1j,-1-1j,-1+1j,1-1j]).reshape((9,1,1))
+        self.es = np.array([0,1,1j,-1,-1j,1+1j,-1+1j,-1-1j,1-1j]).reshape((9,1,1))
         self.ws = np.array([4/9.,1/9.,1/9.,1/9.,1/9.,1/36.,1/36.,1/36.,1/36.]).reshape((9,1,1))
         self.reflectMesh = reflectMesh.astype(bool)
+        self.tau = 1 # TODO sub relevant method
+        self.inletVelocity = 25
         #self.updateRhoAndU()
         
     def stream(self):
-        es,Nvecs = self.esself.Nvecs
+        es,Nvecs = self.es,self.Nvecs
         #Streaming step
         xShift,yShift = np.real(es),np.imag(es)
         for i in np.arange(Nvecs):
@@ -39,7 +41,7 @@ class Lattice:
         es,reflectMask,FiStar,Nvecs = self.es,self.reflectMesh,self.FiStar,self.Nvecs
         # Reflects at the 1's on the mesh
         xShift,yShift = np.real(es),np.imag(es)
-        revDirI = np.array([0,2,1,4,3,6,5,8,7])
+        revDirI = np.array([0,3,4,1,2,7,8,5,6])
         for i in np.arange(1,Nvecs,2):
             swapCopy = np.copy(FiStar[i,reflectMask])
             FiStar[i,reflectMask] = FiStar[revDirI[i],reflectMask]
@@ -52,6 +54,25 @@ class Lattice:
 
 
 
+    def inletOutlet(self):
+        FiStar = self.FiStar
+        # inlet
+        self.rho[0,:] = (FiStar[0,0,:]+FiStar[2,0,:]+FiStar[4,0,:]+\
+                   2*(FiStar[3,0,:]+FiStar[6,0,:]+FiStar[7,0,:]))/(1-self.inletVelocity)
+        FiStar[1,0,:] = FiStar[3,0,:]
+        FiStar[5,0,:] = FiStar[7,0,:] - 1/2 * (FiStar[2,0,:] - FiStar[4,0,:]) + 1/6 * self.rho[0,:] * self.inletVelocity
+        FiStar[8,0,:] = FiStar[6,0,:] - 1/2 * (FiStar[2,0,:] - FiStar[4,0,:]) + 1/6 * self.rho[0,:] * self.inletVelocity
+        
+        # outlet
+        # done by swapping respective 3-1, 6-5, 7-8 for all following code
+        self.rho[-1,:] = (FiStar[0,0,:]+FiStar[2,0,:]+FiStar[4,0,:]+\
+                    2*(FiStar[1,0,:]+FiStar[5,0,:]+FiStar[8,0,:]))/(1-self.inletVelocity)
+        FiStar[3,0,:] = FiStar[1,0,:]
+        FiStar[6,0,:] = FiStar[5,0,:] - 1/2 * (FiStar[2,0,:] - FiStar[4,0,:]) + 1/6 * self.rho[0,:] * self.inletVelocity
+        FiStar[7,0,:] = FiStar[8,0,:] - 1/2 * (FiStar[2,0,:] - FiStar[4,0,:]) + 1/6 * self.rho[0,:] * self.inletVelocity
+
+
+
 
     # Depreciated, replaced by reflectOnMesh
     def reflectOnBorder(self): 
@@ -59,19 +80,26 @@ class Lattice:
         #Boundary Reflection
         xShift,yShift = np.real(es),np.imag(es)
         xSIndex = .5*xShift-.5; ySIndex = .5*yShift-.5; #Maps 1=>0 and -1=>-1 for indexes
-        revDirI = np.array([0,2,1,4,3,6,5,8,7])
+        revDirI = np.array([0,3,4,1,2,7,8,5,6])
         for i in np.arange(Nvecs): 
             if xShift[i]:
                 FiStar[i,xSIndex[i],:]=FiStar[revDirI[i],xSIndex[revDirI[i]],:]
             if yShift[i]:
                 FiStar[i,:,ySIndex[i]]=FiStar[revDirI[i],:,ySIndex[revDirI[i]]]
 
-    def updateFi():
-        conj_u = np.conj(self.u)
-        product = np.real(self.es * conj_u))
-        self.s = self.ws * (3/self.c * product + 9/(2 * self.c ** 2) * product ** 2 - 3/(2 * self.c^2) * self.u * conj_u
+    def updateFi(self):
+        conj_u = np.conj(self.u) 
+        product = np.real(self.es * conj_u)
+        self.s = self.ws * (3/self.c * product + 9/(2. * self.c ** 2) * product ** 2 - 3/(2 * self.c**2) * np.real(self.u * conj_u))
         self.FiEq = self.ws * self.rho + self.rho * self.s
         self.Fi = self.Fi - 1/self.tau * (self.FiStar - self.FiEq)
+
+    def fullTimeStep(self):
+        self.stream()
+        self.inletOutlet()
+        self.reflectOnMesh()
+        self.updateRhoAndU()
+        self.updateFi()
 
 
 
