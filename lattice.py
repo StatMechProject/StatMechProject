@@ -29,7 +29,7 @@ class Lattice:
     def stream(self):
         es,Nvecs = self.es,self.Nvecs
         #Streaming step
-        xShift,yShift = np.real(es),np.imag(es)
+        xShift,yShift = np.real(es).astype(int),np.imag(es).astype(int)
         for i in np.arange(Nvecs):
             self.FiStar[i] = self.Fi[i]
             if xShift[i]:
@@ -37,11 +37,12 @@ class Lattice:
             if yShift[i]:
                 self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=1) 
     
+    
     def reflectOnMesh(self):
         es,reflectMask,FiStar,Nvecs = self.es,self.reflectMesh,self.FiStar,self.Nvecs
         # Reflects at the 1's on the mesh
         xShift,yShift = np.real(es),np.imag(es)
-        revDirI = np.array([0,3,4,1,2,7,8,5,6])
+        revDirI = np.array([0,2,1,4,3,6,5,8,7])
         for i in np.arange(1,Nvecs,2):
             swapCopy = np.copy(FiStar[i,reflectMask])
             FiStar[i,reflectMask] = FiStar[revDirI[i],reflectMask]
@@ -51,6 +52,15 @@ class Lattice:
         es,c,FiStar = self.es,self.c,self.FiStar
         self.rho = np.sum(FiStar,axis=0)
         self.u = (1./self.rho)*np.sum(FiStar*es,axis=0)*c
+
+
+
+    def vorticity(self):
+        # single sided finite difference for del x u (curl u)
+        ux,uy = np.real(self.u),np.imag(self.u)
+        uxincy,uyincx = np.roll(ux,1,1),np.roll(uy,1,0)
+        curlU = (uxincy-ux  -uyincx+uy)/self.dx
+        return curlU
 
 
 
@@ -78,9 +88,9 @@ class Lattice:
     def reflectOnBorder(self): 
         es,FiStar,Nvecs = self.es,self.FiStar,self.Nvecs
         #Boundary Reflection
-        xShift,yShift = np.real(es),np.imag(es)
-        xSIndex = .5*xShift-.5; ySIndex = .5*yShift-.5; #Maps 1=>0 and -1=>-1 for indexes
-        revDirI = np.array([0,3,4,1,2,7,8,5,6])
+        xShift,yShift = np.real(es),np.imag(es) #Maps 1=>0 and -1=>-1 for indexes
+        xSIndex = (.5*xShift-.5).astype(int); ySIndex = (.5*yShift-.5).astype(int); 
+        revDirI = np.array([0,2,1,4,3,6,5,8,7])
         for i in np.arange(Nvecs): 
             if xShift[i]:
                 FiStar[i,xSIndex[i],:]=FiStar[revDirI[i],xSIndex[revDirI[i]],:]
