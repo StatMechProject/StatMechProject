@@ -42,7 +42,7 @@ class Lattice:
         es,reflectMask,FiStar,Nvecs = self.es,self.reflectMesh,self.FiStar,self.Nvecs
         # Reflects at the 1's on the mesh
         xShift,yShift = np.real(es),np.imag(es)
-        revDirI = np.array([0,2,1,4,3,6,5,8,7])
+        revDirI = np.array([0,3,4,1,2,7,8,5,6])
         for i in np.arange(1,Nvecs,2):
             swapCopy = np.copy(FiStar[i,reflectMask])
             FiStar[i,reflectMask] = FiStar[revDirI[i],reflectMask]
@@ -90,7 +90,7 @@ class Lattice:
         #Boundary Reflection
         xShift,yShift = np.real(es),np.imag(es) #Maps 1=>0 and -1=>-1 for indexes
         xSIndex = (.5*xShift-.5).astype(int); ySIndex = (.5*yShift-.5).astype(int); 
-        revDirI = np.array([0,2,1,4,3,6,5,8,7])
+        revDirI = np.array([0,3,4,1,2,7,8,5,6])
         for i in np.arange(Nvecs): 
             if xShift[i]:
                 FiStar[i,xSIndex[i],:]=FiStar[revDirI[i],xSIndex[revDirI[i]],:]
