@@ -1,7 +1,6 @@
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
-from streamplot import streamplot
 
 # Make the recutangular boundary mask
 boundaryMask = np.zeros((512,256))
@@ -131,10 +130,12 @@ class Lattice:
         self.updateFi()
 
 def plttt(latt):
-    X,Y = np.mgrid[0:.511:512j,0:.255:256j]
+    #X,Y = np.mgrid[0:.511:512j,0:.255:256j]
+    X,Y = np.linspace(0,.511,512),np.linspace(0,.255,256)
     ux,uy =np.real(latt.u),np.imag(latt.u)
     fig = plt.figure()
-    streamplot(X,Y,ux,uy)
+    print np.shape(X),np.shape(Y),np.shape(ux),np.shape(uy)
+    plt.streamplot(Y,X,uy,ux)
     plt.show()
 
 class Visualization:
