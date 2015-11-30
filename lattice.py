@@ -1,15 +1,22 @@
 import numpy as np
 import scipy as sp
-
-#Initialization
+import matplotlib.pyplot as plt
+from streamplot import streamplot
 
 # Make the recutangular boundary mask
 boundaryMask = np.zeros((512,256))
-boundaryMask[0,:]=boundaryMask[-1,:]=boundaryMask[:,0]=boundaryMask[:,-1]=1
+X,Y  = np.mgrid[0:512,0:256]
+#boundaryMask[0,:]=boundaryMask[-1,:]=
+boundaryMask[:,0]=boundaryMask[:,-1]=1
+circleMask = ((256-X)**2 + (128-Y)**2) < 25**2
+boundaryMask[circleMask] = 1
+
+
 
 class Lattice:
     
     def __init__(self,reflectMesh=boundaryMask,Nx=512,Ny=256):
+    	self.mew = .00001857 # constant for the mu
         self.Nx,self.Ny,self.Nvecs = 512,256,9
         self.dx=.001; self.dt=.01
         self.c = self.dx/self.dt
@@ -22,9 +29,17 @@ class Lattice:
         self.es = np.array([0,1,1j,-1,-1j,1+1j,-1+1j,-1-1j,1-1j]).reshape((9,1,1))
         self.ws = np.array([4/9.,1/9.,1/9.,1/9.,1/9.,1/36.,1/36.,1/36.,1/36.]).reshape((9,1,1))
         self.reflectMesh = reflectMesh.astype(bool)
-        self.tau = 1 # TODO sub relevant method
         self.inletVelocity = 25
         #self.updateRhoAndU()
+        self.initFs()
+        
+
+    def initFs(self):
+        # using density of air as 1.225 kg/m3 so over 1/800g per mm2
+        self.Fi = np.ones((self.Nvecs,self.Nx,self.Ny))/800.
+        self.stream()
+        self.updateRhoAndU()
+
         
     def stream(self):
         es,Nvecs = self.es,self.Nvecs
@@ -98,11 +113,15 @@ class Lattice:
                 FiStar[i,:,ySIndex[i]]=FiStar[revDirI[i],:,ySIndex[revDirI[i]]]
 
     def updateFi(self):
+    	# Update the the relaxation time constant
+    	viscosity = self.mew/self.rho # 2d array type
+    	tau = ((viscosity*6*self.dt/(self.dx)**2)+1)/2 ## also arraytype
+    	# update Fi from FiStar using the collision operator
         conj_u = np.conj(self.u) 
         product = np.real(self.es * conj_u)
         self.s = self.ws * (3/self.c * product + 9/(2. * self.c ** 2) * product ** 2 - 3/(2 * self.c**2) * np.real(self.u * conj_u))
         self.FiEq = self.ws * self.rho + self.rho * self.s
-        self.Fi = self.Fi - 1/self.tau * (self.FiStar - self.FiEq)
+        self.Fi = self.Fi - 1/tau * (self.FiStar - self.FiEq)
 
     def fullTimeStep(self):
         self.stream()
@@ -111,7 +130,12 @@ class Lattice:
         self.updateRhoAndU()
         self.updateFi()
 
-
+def plttt(latt):
+    X,Y = np.mgrid[0:.511:512j,0:.255:256j]
+    ux,uy =np.real(latt.u),np.imag(latt.u)
+    fig = plt.figure()
+    streamplot(X,Y,ux,uy)
+    plt.show()
 
 class Visualization:
     
@@ -123,3 +147,4 @@ class Visualization:
     
     def animate(self):
         return
+
