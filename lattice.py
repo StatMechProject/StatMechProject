@@ -7,10 +7,10 @@ boundaryMask = np.zeros((512,256))
 X,Y  = np.mgrid[0:512,0:256]
 #boundaryMask[0,:]=boundaryMask[-1,:]=
 boundaryMask[:,0]=boundaryMask[:,-1]=1
-#circleMask = ((256-X)**2 + (128-Y)**2) < 25**2
-#boundaryMask[circleMask] = 1
+circleMask = ((256-X)**2 + (128-Y)**2) < 25**2
+boundaryMask[circleMask] = 1
 
-dividByZeroFudgeFactor = 1E-15
+dividByZeroFudgeFactor = 1E-10
 
 
 class Lattice:
@@ -38,9 +38,9 @@ class Lattice:
         
 
     def initFs(self):
-        # using density of air as 1.225 kg/m3 so over 1/800g per mm2
+        # using density of air as 1.184 kg/m3 so over 1/800g per mm2
 
-        self.Fi[0] = np.ones((self.Nx,self.Ny)) * 1.225 * self.dx**2 * self.whereFluid
+        self.Fi = np.ones((self.Nvecs,self.Nx,self.Ny)) * 1.184 * self.dx**2 * self.whereFluid/9.
         self.stream()
         self.updateRhoAndU()
 
@@ -52,9 +52,9 @@ class Lattice:
         for i in np.arange(Nvecs):
             self.FiStar[i] = self.Fi[i]
             if xShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=1)
+                self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=0)
             if yShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=0) 
+                self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=1) 
     
     
     def reflectOnMesh(self):
