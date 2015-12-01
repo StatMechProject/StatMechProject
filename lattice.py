@@ -19,7 +19,7 @@ class Lattice:
     	self.mew = .00001857 # constant for the mu
         self.Nx,self.Ny,self.Nvecs = 512,256,9
         self.dx=.001
-        self.c = 340
+        self.c = 340.
         self.dt = self.dx/self.c
         self.Fi = np.zeros((self.Nvecs,Nx,Ny)); 
         self.FiStar = self.Fi
@@ -30,7 +30,7 @@ class Lattice:
         self.es = np.array([0,1,1j,-1,-1j,1+1j,-1+1j,-1-1j,1-1j]).reshape((9,1,1))
         self.ws = np.array([4/9.,1/9.,1/9.,1/9.,1/9.,1/36.,1/36.,1/36.,1/36.]).reshape((9,1,1))
         self.reflectMesh = reflectMesh.astype(bool)
-        self.inletVelocity = 70
+        self.inletVelocity = 70.
         self.whereFluid = (boundaryMask==0)
         #self.updateRhoAndU()
         self.initFs()
@@ -52,9 +52,9 @@ class Lattice:
         for i in np.arange(Nvecs):
             self.FiStar[i] = self.Fi[i]
             if xShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=0)
+                self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=1)
             if yShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=1) 
+                self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=0) 
     
     
     def reflectOnMesh(self):
@@ -71,7 +71,7 @@ class Lattice:
         es,c,FiStar = self.es,self.c,self.FiStar
         self.rho = np.sum(FiStar,axis=0)
         sumEFi = np.sum(FiStar*es,axis=0)
-        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor)
+        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor)*self.whereFluid
 
 
 
@@ -112,7 +112,7 @@ class Lattice:
         product = np.real(self.es * conj_u)
         self.s = self.ws * (3/self.c * product + 9/(2. * self.c ** 2) * product ** 2 - 3/(2 * self.c**2) * np.real(self.u * conj_u))
         self.FiEq = self.ws * self.rho + self.rho * self.s
-        self.Fi = self.Fi - 1/tau * (self.FiStar - self.FiEq)
+        self.Fi = self.Fi - 1/tau * (self.FiStar - self.FiEq) * self.whereFluid
 
     def fullTimeStep(self):
         self.stream()
