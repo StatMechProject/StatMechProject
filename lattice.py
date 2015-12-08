@@ -82,6 +82,7 @@ class Lattice:
                 self.FiStar[i] += np.roll(flippedFs[i],xShift[i],axis=0)
             if yShift[i]:
                 self.FiStar[i] += np.roll(flippedFs[i],yShift[i],axis=1) 
+        self.FiStar[:,reflectMask] =0
         
     def updateRhoAndU(self):
         es,c,FiStar = self.es,self.c,self.FiStar
@@ -133,8 +134,8 @@ class Lattice:
 
     def fullTimeStep(self):
         self.stream() # Move distributions disregarding collision
-        self.inletOutlet() # Adjust inlet and outlet distrubutions
-        #self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
+        #self.inletOutlet() # Adjust inlet and outlet distrubutions
+        self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
         self.updateRhoAndU() # Calculate macroscopic quantities
         
         #self.updateFi() # Apply collision operator to determine proper Fi from FiEq
