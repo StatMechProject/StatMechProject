@@ -101,23 +101,32 @@ class Lattice:
 
 
 
-    def inletOutlet(self):
+     def zouHe(self):
         FiStar = self.FiStar # Applies Zou Hue boundary conditions on top and bottom
+        
         # inlet
-        self.rho[0,1:-1] = (FiStar[0,0,1:-1]+FiStar[2,0,1:-1]+FiStar[4,0,1:-1]+\
-                   2*(FiStar[3,0,1:-1]+FiStar[6,0,1:-1]+FiStar[7,0,1:-1]))/(1-self.inletVelocity)
-        FiStar[1,0,1:-1] = FiStar[3,0,1:-1]
-        FiStar[5,0,1:-1] = FiStar[7,0,1:-1] - 1/2 * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) + 1/6 * self.rho[0,1:-1] * self.inletVelocity
-        FiStar[8,0,1:-1] = FiStar[6,0,1:-1] - 1/2 * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) + 1/6 * self.rho[0,1:-1] * self.inletVelocity
-     
-        # outlet
-        # done by swapping respective 3-1, 6-5, 7-8 for all following code
-        self.rho[-1,1:-1] = (FiStar[0,0,1:-1]+FiStar[2,0,1:-1]+FiStar[4,0,1:-1]+\
-                    2*(FiStar[1,0,1:-1]+FiStar[5,0,1:-1]+FiStar[8,0,1:-1]))/(1-self.inletVelocity)
-        FiStar[3,-1,1:-1] = FiStar[1,-1,1:-1]
-        FiStar[6,-1,1:-1] = FiStar[5,-1,1:-1] - 1/2 * (FiStar[2,-1,1:-1] - FiStar[4,-1,1:-1]) + 1/6 * self.rho[-1,1:-1] * self.inletVelocity
-        FiStar[7,-1,1:-1] = FiStar[8,-1,1:-1] - 1/2 * (FiStar[2,-1,1:-1] - FiStar[4,-1,1:-1]) + 1/6 * self.rho[-1,1:-1] * self.inletVelocity
+        self.rho[0,1:-1] = (FiStar[0,0,1:-1] + FiStar[2,0,1:-1] + FiStar[4,0,1:-1] + 2 * (FiStar[6,0,1:-1] + FiStar[3,0,1:-1] + FiStar[7,0,1:-1])/(1+self.u0)
+        FiStar[1,0,1:-1] = FiStar[3,0,1:-1] - (2/3) * self.rho[0,1:-1] * self.u0
+        FiStar[7,0,1:-1] = FiStar[6,0,1:-1] + (1/2) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) - (1/6) * self.rho[0,1:-1] * self.u0
+        FiStar[5,0,1:-1] = FiStar[7,0,1:-1] - (1/2) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) - (1/6) * self.rho[0,1:-1] * self.u0
 
+        # outlet
+        self.u[-1,1:-1] = -1 + (FiStar[0,-1,1:-1] + FiStar[4,-1,1:-1] FiStar[2,-1,1:-1] + 2 * (FiStar[1,-1,1:-1] + FiStar[8,-1,1:-1] + FiStar[5,-1,1:-1]))/self.rho0
+        FiStar[3,-1,1:-1] = FiStar[1,-1,1:-1] - (2/3) * self.rho0 * self.u[-1,1:-1]
+        FiStar[6,-1,1:-1] = FiStar[8,-1,1:-1] + (1/2) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1/6) * self.rho0 * self.u[-1,1:-1]
+        FiStar[7,-1,1:-1] = FiStar[5,-1,1:-1] - (1/2) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1/6) * self.rho0 * self.u[-1,1:-1]
+
+        #bottom 
+        self.rho[:,-1] = FiStar[0,:,-1] + FiStar[1,:,-1] + FiStar[3,:,-1] + 2 * (FiStar[4,:,-1] + FiStar[7,:,-1] + FiStar[8,:,-1])
+        FiStar[2,:,-1] = FiStar[4,:,-1]
+        FiStar[5,:,-1] = FiStar[7,:,-1] - (1/2) * (FiStar[1,:,-1] - FiStar[3,:,-1]) + (1/2) * self.rho[:,-1] * self.u0
+        FiStar[6,:,-1] = FiStar[8,:,-1] + (1/2) * (FiStar[1,:,-1] - FiStar[3,:,-1]) - (1/2) * self.rho[:,-1] * self.u0
+
+        #top
+        self.rho[:,0] = FiStar[0,:,0] + FiStar[1,:,0] + FiStar[3,:,0] + 2 * (FiStar[2,:,0] + FiStar[5,:,0] + FiStar[6,:,0])
+        FiStar[4,:,0] = FiStar[2,:,0]
+        FiStar[7,:,0] = FiStar[5,:,0] - (1/2) * (FiStar[3,:,0] - FiStar[1,:,0]) - (1/2) * self.rho[:,0] * self.u0
+        FiStar[8,:,0] = FiStar[6,:,0] + (1/2) * (FiStar[3,:,0] - FiStar[1,:,0]) + (1/2) * self.rho[:,0] * self.u0
 
 
     def updateFi(self):
@@ -134,7 +143,7 @@ class Lattice:
 
     def fullTimeStep(self):
         self.stream() # Move distributions disregarding collision
-        #self.inletOutlet() # Adjust inlet and outlet distrubutions
+        self.zouHe() 
         self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
         self.updateRhoAndU() # Calculate macroscopic quantities
         
