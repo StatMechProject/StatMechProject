@@ -13,7 +13,7 @@ boundaryMask[testMask] = 1
 #circleMask = ((defaultX/2-X)**2 + (defaultY/2-Y)**2) < 25**2
 #boundaryMask[circleMask] = 1
 
-dividByZeroFudgeFactor = 1E-15
+dividByZeroFudgeFactor = 1E-40
 
 
 class Lattice:
@@ -55,8 +55,8 @@ class Lattice:
         es,Nvecs = self.es,self.Nvecs
         #Streaming step, move each of the distributions in their direction
         xShift,yShift = np.real(es).astype(int),np.imag(es).astype(int)
+        self.FiStar = np.copy(self.Fi)
         for i in np.arange(Nvecs):
-            self.FiStar[i] = self.Fi[i]
             if xShift[i]:
                 self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=0)
             if yShift[i]:
@@ -66,18 +66,28 @@ class Lattice:
     def reflectOnMesh(self):
         es,reflectMask,FiStar,Nvecs = self.es,self.reflectMesh,self.FiStar,self.Nvecs
         # Reflects at the 1's on the mesh
-        xShift,yShift = np.real(es),np.imag(es)
+
         revDirI = np.array([0,3,4,1,2,7,8,5,6])
         for i in [1,2,5,6]:
             swapCopy = np.copy(FiStar[i,reflectMask])
             FiStar[i,reflectMask] = FiStar[revDirI[i],reflectMask]
             FiStar[revDirI[i],reflectMask] = swapCopy
         
+        # stream the reversed particles
+        flippedFs = np.zeros((self.Nvecs,self.Nx,self.Ny))
+        xShift,yShift = np.real(es).astype(int),np.imag(es).astype(int)
+        flippedFs[:,reflectMask] = FiStar[:,reflectMask]
+        for i in np.arange(Nvecs): 
+            if xShift[i]:
+                self.FiStar[i] += np.roll(flippedFs[i],xShift[i],axis=0)
+            if yShift[i]:
+                self.FiStar[i] += np.roll(flippedFs[i],yShift[i],axis=1) 
+        
     def updateRhoAndU(self):
         es,c,FiStar = self.es,self.c,self.FiStar
         self.rho = np.sum(FiStar,axis=0)
         sumEFi = np.sum(FiStar*es,axis=0)
-        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor)*self.whereFluid
+        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor) * self.whereFluid
 
 
 
@@ -111,22 +121,23 @@ class Lattice:
 
     def updateFi(self):
     	# Update the the relaxation time constant
-    	viscosity = self.mu/(self.rho+dividByZeroFudgeFactor) # 2d array type
-    	tau = ((viscosity*6*self.dt/(self.dx)**2)+1)/2 ## also arraytype
+    	viscosity = (self.dx**2)*self.mu/(self.rho+dividByZeroFudgeFactor) # 2d array type
+    	tau = 2#((viscosity*6*self.dt/(self.dx)**2)+1)/2. ## also arraytype
+        
     	# update Fi from FiStar using the collision operator
         conj_u = np.conj(self.u) 
         product = np.real(self.es * conj_u)
         self.s = self.ws * (3/self.c * product + 9/(2. * self.c ** 2) * product ** 2 - 3/(2 * self.c**2) * np.real(self.u * conj_u))
         self.FiEq = self.ws * self.rho + self.rho * self.s
-        self.Fi = self.Fi - 1/tau * (self.FiStar - self.FiEq) * self.whereFluid
+        self.Fi = (self.Fi - (1/tau) * (self.FiStar - self.FiEq)) * self.whereFluid
 
     def fullTimeStep(self):
         self.stream() # Move distributions disregarding collision
         self.inletOutlet() # Adjust inlet and outlet distrubutions
-        self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
+        #self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
         self.updateRhoAndU() # Calculate macroscopic quantities
         
-        self.updateFi() # Apply collision operator to determine proper Fi from FiEq
+        #self.updateFi() # Apply collision operator to determine proper Fi from FiEq
 
 def plttt(latt):
     #X,Y = np.mgrid[0:.511:512j,0:.255:256j]
