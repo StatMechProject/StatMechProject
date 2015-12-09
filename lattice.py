@@ -3,39 +3,35 @@ import scipy as sp
 import matplotlib.pyplot as plt
 
 
-defaultX = 100
-defaultY = 100
+defaultX = 300
+defaultY = 300
 # Make the recutangular boundary mask
 boundaryMask = np.zeros((defaultX,defaultY))
 X,Y  = np.mgrid[0:defaultX,0:defaultY]
-testMask =  (X < 53) * (X > 47) * (Y < 70) * (Y > 30)
-boundaryMask[testMask] = 1
-#circleMask = ((defaultX/2-X)**2 + (defaultY/2-Y)**2) < 25**2
-#boundaryMask[circleMask] = 1
+#testMask =  (X < 53) * (X > 47) * (Y < 70) * (Y > 30)
+#boundaryMask[testMask] = 1
+circleMask = ((defaultX/2-X)**2 + (defaultY/2-Y)**2) < 30**2
+boundaryMask[circleMask] = 1
 
-dividByZeroFudgeFactor = 1E-25
+divideByZeroFudgeFactor = 1E-25
 
 
 class Lattice:
     
     def __init__(self,reflectMesh=boundaryMask,Nx=defaultX,Ny=defaultY):
-    	self.mu = .00001857 # constant for the mu
+        self.mu = .00001857*100# *1000# constant for the mu
         self.Nx,self.Ny,self.Nvecs = Nx,Ny,9
-        self.dx=.001 # 1mm spacing
+        self.dx=.00001 # 1mm spacing
         self.c = 340. # speed of sound 340 m/s
         self.dt = self.dx/self.c
-        self.Fi = np.zeros((self.Nvecs,Nx,Ny)); 
-        self.FiStar = self.Fi
-        self.FiEq = self.Fi
         self.rho = np.zeros((Nx,Ny))
         self.u = np.zeros((Nx,Ny)) # 2d grid with complex numbers for vel vectors
-        self.s = self.Fi
         self.es = np.array([0,1,1j,-1,-1j,1+1j,-1+1j,-1-1j,1-1j]).reshape((9,1,1)) #Our velocity basis
         self.ws = np.array([4/9.,1/9.,1/9.,1/9.,1/9.,1/36.,1/36.,1/36.,1/36.]).reshape((9,1,1)) #u weight
         self.reflectMesh = reflectMesh.astype(bool) # Mask containing borders an objects in our grid
-        self.u0 = 70. #m/s
+        self.u0 = 70./self.c #m/s
         self.rho0 = 1.184 * self.dx**2 
-        self.whereFluid = (boundaryMask==0) # All the places where we should be able to have fluid
+        self.whereFluid = (boundaryMask==0).astype(bool) # All the places where we should be able to have fluid
         self.initFs()
 
         
@@ -45,25 +41,36 @@ class Lattice:
         # Uniformly distribute over velocity and position space, remove fluid in boundaries
 
         self.Fi = np.ones((self.Nvecs,self.Nx,self.Ny)) * self.rho0 * self.whereFluid/9.
+        #self.Fi[:,20,20] *= 3
+        self.FiStar = self.Fi
+        self.FiEq = self.Fi
+        self.s = self.Fi
+        
         es,c,Fi = self.es,self.c,self.Fi
         self.rho = np.sum(Fi,axis=0)
         sumEFi = np.sum(Fi*es,axis=0)
-        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor)*self.whereFluid
+        self.u= c*sumEFi/(np.maximum(self.rho,divideByZeroFudgeFactor)) * self.whereFluid
 
         
     def stream(self):
         es,Nvecs = self.es,self.Nvecs
         #Streaming step, move each of the distributions in their direction
         xShift,yShift = np.real(es).astype(int),np.imag(es).astype(int)
-        self.FiStar = np.copy(self.Fi)
+        
         for i in np.arange(Nvecs):
-            if xShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],xShift[i],axis=0)
-            if yShift[i]:
-                self.FiStar[i] = np.roll(self.FiStar[i],yShift[i],axis=1) 
-    
-    
-    def reflectOnMesh(self):
+            if xShift[i]!=0:
+                #print(self.FiStar[i])
+                self.FiStar[i,:,:] = np.roll(self.FiStar[i,:,:],xShift[i,:,:],axis=0)
+                #if xShift[i]==1:  self.FiStar[i,0,:]=0
+                #if xShift[i]==-1: self.FiStar[i,-1,:]=0
+                #print(self.FiStar[i])
+            if yShift[i]!=0:
+                self.FiStar[i,:,:] = np.roll(self.FiStar[i,:,:],yShift[i,:,:],axis=1)
+                #if yShift[i]==1:  self.FiStar[i,:,0]=0
+                #if yShift[i]==-1: self.FiStar[i,:,-1]=0
+
+
+    def bounceBack(self):
         es,reflectMask,FiStar,Nvecs = self.es,self.reflectMesh,self.FiStar,self.Nvecs
         # Reflects at the 1's on the mesh
 
@@ -88,7 +95,8 @@ class Lattice:
         es,c,FiStar = self.es,self.c,self.FiStar
         self.rho = np.sum(FiStar,axis=0)
         sumEFi = np.sum(FiStar*es,axis=0)
-        self.u= c*sumEFi/(self.rho+dividByZeroFudgeFactor) * self.whereFluid
+        self.u= c*sumEFi/(np.maximum(self.rho,divideByZeroFudgeFactor)) * self.whereFluid
+
 
 
 
@@ -101,54 +109,62 @@ class Lattice:
 
 
 
-     def zouHe(self):
+    def zouHe(self):
 
         FiStar = self.FiStar # Applies Zou Hue boundary conditions on top and bottom
-
+        #FiStar[1,0,:] = self.rho0
+        #FiStar[3,-1,:] = self.rho0
         # inlet
-        self.rho[0,1:-1] = (FiStar[0,0,1:-1] + FiStar[2,0,1:-1] + FiStar[4,0,1:-1] + 2 * (FiStar[6,0,1:-1] + FiStar[3,0,1:-1] + FiStar[7,0,1:-1])) / (1+self.u0)
-        FiStar[1,0,1:-1] = FiStar[3,0,1:-1] - (2/3) * self.rho[0,1:-1] * self.u0
-        FiStar[7,0,1:-1] = FiStar[6,0,1:-1] + (1/2) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) - (1/6) * self.rho[0,1:-1] * self.u0
-        FiStar[5,0,1:-1] = FiStar[7,0,1:-1] - (1/2) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) - (1/6) * self.rho[0,1:-1] * self.u0
+        trho = (FiStar[0,0,1:-1] + FiStar[2,0,1:-1] + FiStar[4,0,1:-1] + 2. * (FiStar[6,0,1:-1] + FiStar[3,0,1:-1] + FiStar[7,0,1:-1])) / (1. - self.u0)
+        
+        FiStar[1,0,1:-1] = FiStar[3,0,1:-1] + (2./3.) * trho * self.u0
+        FiStar[5,0,1:-1] = FiStar[7,0,1:-1] - (1./2.) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) + (1./6.) * trho * self.u0
+        FiStar[8,0,1:-1] = FiStar[6,0,1:-1] + (1./2.) * (FiStar[2,0,1:-1] - FiStar[4,0,1:-1]) + (1./6.) * trho * self.u0
 
         # outlet
-        self.u[-1,1:-1] = -1 + (FiStar[0,-1,1:-1] + FiStar[4,-1,1:-1] + FiStar[2,-1,1:-1] + 2 * (FiStar[1,-1,1:-1] + FiStar[8,-1,1:-1] + FiStar[5,-1,1:-1])) / self.rho0
-        FiStar[3,-1,1:-1] = FiStar[1,-1,1:-1] - (2/3) * self.rho0 * self.u[-1,1:-1]
-        FiStar[6,-1,1:-1] = FiStar[8,-1,1:-1] + (1/2) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1/6) * self.rho0 * self.u[-1,1:-1]
-        FiStar[7,-1,1:-1] = FiStar[5,-1,1:-1] - (1/2) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1/6) * self.rho0 * self.u[-1,1:-1]
+        tu = -1 + (FiStar[0,-1,1:-1] + FiStar[4,-1,1:-1] + FiStar[2,-1,1:-1] + 2. * (FiStar[1,-1,1:-1] + FiStar[8,-1,1:-1] + FiStar[5,-1,1:-1])) / self.rho0
+        FiStar[3,-1,1:-1] = FiStar[1,-1,1:-1] - (2./3.) * self.rho0 * tu
+        FiStar[6,-1,1:-1] = FiStar[8,-1,1:-1] + (1./2.) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1./6.) * self.rho0 * tu
+        FiStar[7,-1,1:-1] = FiStar[5,-1,1:-1] - (1./2.) * (FiStar[4,-1,1:-1] - FiStar[2,-1,1:-1]) - (1./6.) * self.rho0 * tu
 
         #bottom 
-        self.rho[:,-1] = FiStar[0,:,-1] + FiStar[1,:,-1] + FiStar[3,:,-1] + 2 * (FiStar[4,:,-1] + FiStar[7,:,-1] + FiStar[8,:,-1])
+        trho = FiStar[0,:,-1] + FiStar[1,:,-1] + FiStar[3,:,-1] + 2. * (FiStar[4,:,-1] + FiStar[7,:,-1] + FiStar[8,:,-1])
         FiStar[2,:,-1] = FiStar[4,:,-1]
-        FiStar[5,:,-1] = FiStar[7,:,-1] - (1/2) * (FiStar[1,:,-1] - FiStar[3,:,-1]) + (1/2) * self.rho[:,-1] * self.u0
-        FiStar[6,:,-1] = FiStar[8,:,-1] + (1/2) * (FiStar[1,:,-1] - FiStar[3,:,-1]) - (1/2) * self.rho[:,-1] * self.u0
+        FiStar[5,:,-1] = FiStar[7,:,-1] - (1./2.) * (FiStar[1,:,-1] - FiStar[3,:,-1]) + (1./2.) * trho * self.u0
+        FiStar[6,:,-1] = FiStar[8,:,-1] + (1./2.) * (FiStar[1,:,-1] - FiStar[3,:,-1]) - (1./2.) * trho * self.u0
 
         #top
-        self.rho[:,0] = FiStar[0,:,0] + FiStar[1,:,0] + FiStar[3,:,0] + 2 * (FiStar[2,:,0] + FiStar[5,:,0] + FiStar[6,:,0])
+        trho = FiStar[0,:,0] + FiStar[1,:,0] + FiStar[3,:,0] + 2. * (FiStar[2,:,0] + FiStar[5,:,0] + FiStar[6,:,0])
         FiStar[4,:,0] = FiStar[2,:,0]
-        FiStar[7,:,0] = FiStar[5,:,0] - (1/2) * (FiStar[3,:,0] - FiStar[1,:,0]) - (1/2) * self.rho[:,0] * self.u0
-        FiStar[8,:,0] = FiStar[6,:,0] + (1/2) * (FiStar[3,:,0] - FiStar[1,:,0]) + (1/2) * self.rho[:,0] * self.u0
+        FiStar[7,:,0] = FiStar[5,:,0] - (1./2.) * (FiStar[3,:,0] - FiStar[1,:,0]) - (1./2.) * trho * self.u0
+        FiStar[8,:,0] = FiStar[6,:,0] + (1./2.) * (FiStar[3,:,0] - FiStar[1,:,0]) + (1./2.) * trho * self.u0
 
 
 
     def updateFi(self):
-    	# Update the the relaxation time constant
-    	viscosity = self.mu/(self.rho+dividByZeroFudgeFactor)#*(self.dx**2) # 2d array type
-    	tau = ((viscosity*6*self.dt/(self.dx)**2)+1)/2. ## also arraytype
+        # Update the the relaxation time constant
+        viscosity = self.mu/(np.maximum(self.rho,divideByZeroFudgeFactor)) * (self.dx**2) # 2d array type
+        tau = ((viscosity*6.*self.dt/(self.dx**2))+1.)/2. ## also arraytype
         
-    	# update Fi from FiStar using the collision operator
-        conj_u = np.conj(self.u) 
-        product = np.real(self.es * conj_u)
-        self.s = self.ws * (3./self.c * product + 9./(2. * self.c ** 2) * product ** 2 - 3/(2 * self.c**2) * np.real(self.u * conj_u))
+        # update Fi from FiStar using the collision operator
+        conj_u = np.conj(self.u)
+        product = np.real(self.u)*np.real(self.es)+np.imag(self.u)*np.imag(self.es)
+
+        self.s = self.ws * (3. * product / self.c  + 9. / (2. * self.c ** 2) * product ** 2 - 3. / (2. * self.c**2) * np.abs(self.u)**2)
+
+
         self.FiEq = self.ws * self.rho + self.rho * self.s
-        self.Fi -= (1/tau) * (self.FiStar - self.FiEq) * self.whereFluid
+        #print "before stream", np.min(self.FiStar)
+        self.Fi = self.FiStar - (1/tau) * (self.FiStar - self.FiEq) * self.whereFluid
+        
 
     def fullTimeStep(self):
+
+        self.FiStar = np.copy(self.Fi)
         self.stream() # Move distributions disregarding collision
         self.zouHe() # Adjust inlet and outlet distrubutions
-        self.reflectOnMesh() # Reverse velocities of distributions that are out of bounds
+        self.bounceBack() # Reverse velocities of distributions that are out of bounds
         self.updateRhoAndU() # Calculate macroscopic quantities
-        
         self.updateFi() # Apply collision operator to determine proper Fi from FiEq
 
 def plttt(latt):
