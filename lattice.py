@@ -3,15 +3,17 @@ import scipy as sp
 import matplotlib.pyplot as plt
 
 
-defaultX = 300
+defaultX = 400
 defaultY = 300
 # Make the recutangular boundary mask
 boundaryMask = np.zeros((defaultX,defaultY))
 X,Y  = np.mgrid[0:defaultX,0:defaultY]
 #testMask =  (X < 53) * (X > 47) * (Y < 70) * (Y > 30)
 #boundaryMask[testMask] = 1
-circleMask = ((defaultX/2-X)**2 + (defaultY/2-Y)**2) < 30**2
+circleMask = ((defaultX * 4./9.-X)**2 + (defaultY/2.-Y)**2) < 15.**2
 boundaryMask[circleMask] = 1
+#plateMask = (Y==150) * (X > defaultX * 1./10.) * (X < defaultX * 11./10.)
+#boundaryMask[plateMask] = 1
 
 divideByZeroFudgeFactor = 1E-25
 
@@ -19,7 +21,7 @@ divideByZeroFudgeFactor = 1E-25
 class Lattice:
     
     def __init__(self,reflectMesh=boundaryMask,Nx=defaultX,Ny=defaultY):
-        self.mu = .00001857*100# *1000# constant for the mu
+        self.mu = .00001857 * 100# *1000# constant for the mu
         self.Nx,self.Ny,self.Nvecs = Nx,Ny,9
         self.dx=.00001 # 1mm spacing
         self.c = 340. # speed of sound 340 m/s
@@ -40,8 +42,7 @@ class Lattice:
         # using density of air as 1.184 kg/m3 and our grid is 1m thick
         # Uniformly distribute over velocity and position space, remove fluid in boundaries
 
-        self.Fi = np.ones((self.Nvecs,self.Nx,self.Ny)) * self.rho0 * self.whereFluid/9.
-        #self.Fi[:,20,20] *= 3
+        self.Fi = (np.ones((self.Nvecs,self.Nx,self.Ny)) + 0.3 * (np.random.rand(self.Nvecs,self.Nx,self.Ny) -1./2.) )* self.rho0 * self.whereFluid/9.       
         self.FiStar = self.Fi
         self.FiEq = self.Fi
         self.s = self.Fi
@@ -147,7 +148,6 @@ class Lattice:
         tau = ((viscosity*6.*self.dt/(self.dx**2))+1.)/2. ## also arraytype
         
         # update Fi from FiStar using the collision operator
-        conj_u = np.conj(self.u)
         product = np.real(self.u)*np.real(self.es)+np.imag(self.u)*np.imag(self.es)
 
         self.s = self.ws * (3. * product / self.c  + 9. / (2. * self.c ** 2) * product ** 2 - 3. / (2. * self.c**2) * np.abs(self.u)**2)
@@ -166,6 +166,21 @@ class Lattice:
         self.bounceBack() # Reverse velocities of distributions that are out of bounds
         self.updateRhoAndU() # Calculate macroscopic quantities
         self.updateFi() # Apply collision operator to determine proper Fi from FiEq
+         
+
+    def convergence(self):
+        
+        u1 = np.copy(self.u)
+        rho1 = np.copy(self.rho)
+        self.fullTimeStep()
+        u2 = np.copy(self.u)
+        rho2 = np.copy(self.rho)
+        
+        uConv = np.max(np.abs(u1 - u2))
+        rhoConv = np.max(np.abs(rho1 - rho2))
+        
+        return {"u":uConv, "rho":rhoConv}
+    
 
 def plttt(latt):
     #X,Y = np.mgrid[0:.511:512j,0:.255:256j]
