@@ -1,0 +1,12 @@
+ClearAll["Global`*"];
+sol = NDSolve[{f'''[eta] + 1/2 f[eta] f''[eta] == 0, f[0] == 0, 
+    f'[0] == 0, f'[10] == 1}, f, {eta, 0, 10}];
+Plot[f[eta] /. sol, {eta, 0, 10}];
+dx = 0.0001;
+mu = .00001857*100;
+v = 70;
+rho = 1.184;
+Reynx = x rho v/mu;
+delta = 4.91 x/Sqrt[Reynx]
+Plot[delta, {x, 0, 600 * dx}]
+Plot[Reynx, {x, 0, 600 * dx}];
